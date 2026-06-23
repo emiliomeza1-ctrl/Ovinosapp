@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ovinos El Sabino - Control Integral Abierto</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#059669">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brandGreen: '#059669',
+                        brandGreenLight: '#10B981',
+                        appBg: '#F8FAFC',
+                        textPrimary: '#0F172A',
+                        textSecondary: '#64748B',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+                        'glow': '0 0 15px rgba(16, 185, 129, 0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F8FAFC; color: #0F172A; -webkit-font-smoothing: antialiased; transition: background-color 0.3s, color 0.3s; }
+        .nav-link { color: #64748B; font-weight: 500; border-bottom: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .nav-link:hover { color: #0F172A; }
+        .nav-link.active { color: #059669; font-weight: 600; border-bottom: 2px solid #059669; }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        input, select, textarea { outline: none; transition: all 0.2s ease; }
+        input:focus, select:focus, textarea:focus { border-color: #059669 !important; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1); }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Reglas de Modo Nocturno */
+        html.dark body { background-color: #0F172A; color: #F8FAFC; }
+        html.dark .bg-white { background-color: #1E293B !important; border-color: #334155 !important; }
+        html.dark .text-textPrimary { color: #F8FAFC !important; }
+        html.dark .text-textSecondary { color: #94A3B8 !important; }
+        html.dark .bg-slate-50, html.dark .bg-slate-100 { background-color: #0F172A !important; border-color: #334155 !important; color: #F8FAFC !important; }
+        html.dark nav { background-color: #1E293B !important; border-color: #334155 !important; }
+        html.dark input, html.dark select, html.dark textarea { background-color: #0F172A !important; color: #F8FAFC !important; border-color: #334155 !important; }
+        html.dark .hover\:bg-slate-50:hover { background-color: #334155 !important; }
+        html.dark table th { background-color: #0F172A !important; color: #94A3B8 !important; border-color: #334155 !important; }
+        html.dark table td, html.dark table tr { border-color: #334155 !important; }
+        html.dark .border-b, html.dark .border-t, html.dark .border-gray-50, html.dark .border-gray-100 { border-color: #334155 !important; }
+        html.dark .nav-link { color: #94A3B8; }
+        html.dark .nav-link:hover { color: #F8FAFC; }
+        html.dark .nav-link.active { color: #10B981; border-color: #10B981; }
+    </style>
+</head>
+<body class="font-sans antialiased min-h-screen flex flex-col">
+
+    <nav class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm" id="main-nav">
+        <div class="max-w-7xl mx-auto px-4 md:px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-center justify-between w-full md:w-auto">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-lg bg-textPrimary flex items-center justify-center text-white font-bold shadow-md shrink-0">
+                        <i data-lucide="box" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[15px] font-bold tracking-tight text-textPrimary leading-tight">Ovinos El Sabino</span>
+                        <span class="text-[10px] font-semibold text-textSecondary font-mono tracking-wider flex items-center gap-1">
+                            <i data-lucide="map-pin" class="w-3 h-3"></i> TEQUEPEXPAN
+                        </span>
+                    </div>
+                </div>
+                <div class="md:hidden text-xs text-textSecondary font-mono bg-slate-50 border border-slate-200 px-2 py-1 rounded-full flex items-center space-x-1 shadow-inner">
+                    <span class="w-2 h-2 rounded-full bg-brandGreen shadow-glow animate-pulse" id="sync-status-mobile"></span>
+                </div>
+            </div>
+            <div class="flex space-x-6 text-[13px] overflow-x-auto scrollbar-hide w-full md:w-auto pb-1">
+                <button onclick="switchPage('dashboard')" id="nav-dashboard" class="nav-link active pb-1 mt-1">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i> Dashboard
+                </button>
+                <button onclick="switchPage('inventario')" id="nav-inventario" class="nav-link pb-1 mt-1">
+                    <i data-lucide="database" class="w-4 h-4 shrink-0"></i> Inventario
+                </button>
+                <button onclick="switchPage('vientres')" id="nav-vientres" class="nav-link pb-1 mt-1">
+                    <i data-lucide="git-merge" class="w-4 h-4 shrink-0"></i> Vientres
+                </button>
+                <button onclick="switchPage('crias')" id="nav-crias" class="nav-link pb-1 mt-1">
+                    <i data-lucide="baby" class="w-4 h-4 shrink-0"></i> Crías
+                </button>
+                <button onclick="switchPage('sementales')" id="nav-sementales" class="nav-link pb-1 mt-1">
+                    <i data-lucide="crown" class="w-4 h-4 shrink-0"></i> Sementales
+                </button>
+                <button onclick="switchPage('machos')" id="nav-machos" class="nav-link pb-1 mt-1">
+                    <i data-lucide="shield" class="w-4 h-4 shrink-0"></i> Machos
+                </button>
+                <button onclick="switchPage('remplazos')" id="nav-remplazos" class="nav-link pb-1 mt-1">
+                    <i data-lucide="refresh-cw" class="w-4 h-4 shrink-0"></i> Remplazos
+                </button>
+            </div>
+            <div class="hidden md:flex text-xs text-textSecondary font-mono bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full items-center space-x-2 shadow-inner shrink-0">
+                <button onclick="toggleTheme()" class="p-1.5 rounded-full bg-slate-50 border border-slate-200 text-textSecondary hover:text-textPrimary transition-colors shadow-inner mr-2" title="Cambiar tema">
+                    <i data-lucide="moon" id="theme-icon" class="w-4 h-4"></i>
+                </button>
+                <span class="w-2 h-2 rounded-full bg-brandGreen shadow-glow animate-pulse" id="sync-status"></span>
+                <span class="font-medium">Modo Abierto</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 md:px-6 py-6 flex-grow w-full overflow-hidden" id="main-content">
+
+        <section id="page-dashboard" class="fade-in space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight text-textPrimary">Consola de Control</h1>
+                    <p class="text-textSecondary text-[13px] mt-1">Sincronización en tiempo real activa.</p>
+                </div>
+                <div class="flex gap-2 w-full md:w-auto">
+                    <button onclick="toggleTheme()" class="md:hidden bg-slate-50 border border-slate-200 text-textSecondary p-3 rounded-xl shadow-soft flex items-center justify-center">
+                        <i data-lucide="moon" id="theme-icon-mobile" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="generarReporteSemanal()" class="w-full md:w-auto bg-textPrimary hover:bg-black text-white px-5 py-3 md:py-2.5 rounded-xl text-[13px] font-semibold shadow-soft hover:shadow-lg transition-all flex items-center justify-center gap-2 card-hover shrink-0">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> Generar Reporte Semanal
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-soft card-hover relative overflow-hidden group">
+                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500"><i data-lucide="database" class="w-20 h-20"></i></div>
+                    <p class="text-[10px] md:text-[11px] font-bold text-textSecondary uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="layers" class="w-3 h-3"></i> Existencias</p>
+                    <p class="text-3xl md:text-4xl font-bold mt-2 text-textPrimary" id="metric-total">0</p>
+                </div>
+                <div class="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 shadow-soft card-hover relative overflow-hidden group">
+                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500 text-emerald-600"><i data-lucide="check-circle" class="w-20 h-20"></i></div>
+                    <p class="text-[10px] md:text-[11px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="trending-up" class="w-3 h-3"></i> Conforme</p>
+                    <p class="text-3xl md:text-4xl font-bold mt-2 text-brandGreen" id="metric-optimo">0</p>
+                </div>
+                <div class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 shadow-soft card-hover relative overflow-hidden group">
+                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500 text-indigo-600"><i data-lucide="heart-pulse" class="w-20 h-20"></i></div>
+                    <p class="text-[10px] md:text-[11px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="syringe" class="w-3 h-3"></i> Sanidad</p>
+                    <p class="text-3xl md:text-4xl font-bold mt-2 text-indigo-600" id="metric-tratamientos">0</p>
+                </div>
+                <div class="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 shadow-soft card-hover relative overflow-hidden group">
+                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500 text-blue-600"><i data-lucide="cloud-sun" class="w-20 h-20"></i></div>
+                    <p class="text-[10px] md:text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="thermometer" class="w-3 h-3"></i> Temp.</p>
+                    <p class="text-3xl md:text-4xl font-bold mt-2 text-blue-600" id="metric-clima-hoy">--°C</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-5 md:p-6 rounded-2xl border border-gray-100 shadow-soft flex flex-col justify-between">
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center border-b border-gray-50 pb-3">
+                            <h3 class="text-[14px] font-bold text-textPrimary uppercase tracking-wide flex items-center gap-2"><i data-lucide="clipboard-edit" class="w-4 h-4 text-brandGreen"></i> Ficha Diaria</h3>
+                            <span class="text-[11px] font-mono bg-slate-100 text-textPrimary px-2.5 py-1 rounded-md font-semibold border border-slate-200" id="clima-fecha-seleccionada">Día</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 md:gap-4 text-[13px]">
+                            <div>
+                                <label class="block text-textSecondary mb-1.5 font-medium text-xs">Temp. (°C)</label>
+                                <input type="number" id="input-temp" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-semibold input-clima focus:bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-textSecondary mb-1.5 font-medium text-xs">Humedad (%)</label>
+                                <input type="number" id="input-hum" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-semibold input-clima focus:bg-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 md:gap-4 text-[13px]">
+                            <div>
+                                <label class="block text-textSecondary mb-1.5 font-medium text-xs">Ración</label>
+                                <select id="input-dieta" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg input-clima font-medium focus:bg-white cursor-pointer">
+                                    <option value="Forraje Estándar">Forraje Básico</option>
+                                    <option value="Concentrado Proteico">Concentrado Proteico</option>
+                                    <option value="Silo + Minerales">Silo + Minerales</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-textSecondary mb-1.5 font-medium text-xs">Tratamiento</label>
+                                <select id="input-tratamiento" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg input-clima font-medium focus:bg-white cursor-pointer">
+                                    <option value="Ninguno">Ninguno</option>
+                                    <option value="Desparasitación">Desparasitación</option>
+                                    <option value="Vacunación">Vacunación</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="text-[13px]">
+                            <label class="block text-textSecondary mb-1.5 font-medium text-xs">Bitácora / Observaciones</label>
+                            <textarea id="input-clima-notas" rows="3" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg resize-none focus:bg-white"></textarea>
+                        </div>
+                    </div>
+                    <div class="pt-4 mt-2 border-t border-gray-50">
+                        <button onclick="updateClimaDia()" class="w-full bg-brandGreen hover:bg-brandGreenLight text-white text-[13px] py-3 rounded-xl font-semibold transition-colors shadow-md hover:shadow-lg mb-3 flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i> Guardar Cambios
+                        </button>
+                        <div id="clima-diagnostico-box" class="p-3 rounded-xl text-[11px] font-mono border"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-2xl border border-gray-100 shadow-soft lg:col-span-2 space-y-4">
+                    <div class="flex justify-between items-center border-b border-gray-50 pb-3">
+                        <h3 class="text-[14px] font-bold text-textPrimary flex items-center gap-2"><i data-lucide="calendar-days" class="w-4 h-4 text-brandGreen"></i> Agenda</h3>
+                        <span class="text-[12px] bg-slate-100 text-textPrimary px-3 py-1 rounded-md font-semibold border border-slate-200" id="mes-actual-display">Mes 2026</span>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 md:gap-2 text-center text-[10px] md:text-[11px] font-bold text-textSecondary uppercase tracking-wider mb-1">
+                        <div>Do</div><div>Lu</div><div>Ma</div><div>Mi</div><div>Ju</div><div>Vi</div><div>Sá</div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 md:gap-2 text-xs" id="calendar-days-container"></div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-2xl border border-gray-100 p-5 md:p-6 space-y-4 shadow-soft">
+                <h3 class="text-[14px] font-bold text-textPrimary flex items-center gap-2"><i data-lucide="bell-ring" class="w-4 h-4 text-amber-500"></i> Alertas Clínicas y Biométricas</h3>
+                <div class="space-y-2.5 font-mono text-[11px] md:text-[12px]" id="dashboard-insights"></div>
+            </div>
+        </section>
+
+        <section id="page-inventario" class="fade-in hidden space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                <h1 class="text-2xl font-bold tracking-tight text-textPrimary">Inventario Maestro</h1>
+                <button onclick="openCreateModal('Desarrollo')" class="w-full md:w-auto bg-brandGreen hover:bg-brandGreenLight text-white px-5 py-3 md:py-2.5 rounded-xl text-[13px] font-semibold shadow-soft transition-all card-hover flex items-center justify-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Registrar Unidad
+                </button>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-soft">
+                <div class="overflow-x-auto rounded-2xl">
+                    <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                        <thead>
+                            <tr class="border-b border-gray-100 bg-slate-50 text-[11px] font-bold text-textSecondary uppercase tracking-wider">
+                                <th class="py-4 px-4 md:px-6">Arete ID</th><th class="py-4 px-4 md:px-6">Categoría</th><th class="py-4 px-4 md:px-6">Raza</th><th class="py-4 px-4 md:px-6">Edad</th><th class="py-4 px-4 md:px-6">Peso Real</th><th class="py-4 px-4 md:px-6">Desviación</th><th class="py-4 px-4 md:px-6">Estatus</th><th class="py-4 px-4 md:px-6 text-right">Manejo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-inventario" class="divide-y divide-gray-50 text-[13px] font-medium text-textPrimary"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-vientres" class="fade-in hidden space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                <h1 class="text-2xl font-bold text-textPrimary">Vientres <span class="text-textSecondary text-lg font-medium hidden md:inline">(Hembras de Cría)</span></h1>
+                <button onclick="openCreateModal('Vientre')" class="w-full md:w-auto bg-brandGreen hover:bg-brandGreenLight text-white px-5 py-3 md:py-2.5 rounded-xl text-[13px] font-semibold shadow-soft transition-all card-hover flex items-center justify-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Registrar Vientre
+                </button>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-soft">
+                <div class="overflow-x-auto rounded-2xl">
+                    <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                        <thead><tr class="border-b border-gray-100 bg-slate-50 text-[11px] font-bold text-textSecondary uppercase tracking-wider"><th class="py-4 px-4 md:px-6">Arete</th><th class="py-4 px-4 md:px-6">Raza</th><th class="py-4 px-4 md:px-6">Edad</th><th class="py-4 px-4 md:px-6">Gestación</th><th class="py-4 px-4 md:px-6">Desviación</th><th class="py-4 px-4 md:px-6">Estatus</th><th class="py-4 px-4 md:px-6 text-right">Manejo</th></tr></thead>
+                        <tbody id="table-vientres" class="divide-y divide-gray-50 text-[13px] font-medium text-textPrimary"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-crias" class="fade-in hidden space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                <h1 class="text-2xl font-bold text-textPrimary">Crías <span class="text-textSecondary text-lg font-medium hidden md:inline">y Lactantes</span></h1>
+                <button onclick="openCreateModal('Cría')" class="w-full md:w-auto bg-brandGreen hover:bg-brandGreenLight text-white px-5 py-3 md:py-2.5 rounded-xl text-[13px] font-semibold shadow-soft transition-all card-hover flex items-center justify-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Registrar Cordero
+                </button>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-soft">
+                <div class="overflow-x-auto rounded-2xl">
+                    <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                        <thead><tr class="border-b border-gray-100 bg-slate-50 text-[11px] font-bold text-textSecondary uppercase tracking-wider"><th class="py-4 px-4 md:px-6">Arete</th><th class="py-4 px-4 md:px-6">Raza</th><th class="py-4 px-4 md:px-6">Edad</th><th class="py-4 px-4 md:px-6">Peso</th><th class="py-4 px-4 md:px-6">Desviación</th><th class="py-4 px-4 md:px-6">Estatus</th><th class="py-4 px-4 md:px-6 text-right">Manejo</th></tr></thead>
+                        <tbody id="table-crias" class="divide-y divide-gray-50 text-[13px] font-medium text-textPrimary"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-sementales" class="fade-in hidden space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                <h1 class="text-2xl font-bold text-textPrimary">Sementales <span class="text-textSecondary text-lg font-medium hidden md:inline">(Machos Puros)</span></h1>
+                <button onclick="openCreateModal('Semental')" class="w-full md:w-auto bg-brandGreen hover:bg-brandGreenLight text-white px-5 py-3 md:py-2.5 rounded-xl text-[13px] font-semibold shadow-soft transition-all card-hover flex items-center justify-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Registrar Semental
+                </button>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-soft">
+                <div class="overflow-x-auto rounded-2xl">
+                    <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                        <thead><tr class="border-b border-gray-100 bg-slate-50 text-[11px] font-bold text-textSecondary uppercase tracking-wider"><th class="py-4 px-4 md:px-6">Arete</th><th class="py-4 px-4 md:px-6">Raza</th><th class="py-4 px-4 md:px-6">Edad</th><th class="py-4 px-4 md:px-6">Peso</th><th class="py-4 px-4 md:px-6">Desviación</th><th class="py-4 px-4 md:px-6">Estatus</th><th class="py-4 px-4 md:px-6 text-right">Manejo</th></tr></thead>
+                        <tbody id="table-sementales" class="divide-y divide-gray-50 text-[13px] font-medium text-textPrimary"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-machos" class="fade-in hidden space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                <h1 class="text-2xl font-bold text-textPrimary">Machos</h1>
+                <button onclick="openCreateModal('Macho')" class="w-full md:w-auto bg-brandGreen hover:bg-brandGreenLight text-white px-5 py-3 md:py-2.5 rounded-xl text-[13px] font-semibold shadow-soft transition-all card-hover flex items-center justify-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Registrar Macho
+                </button>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-soft">
+                <div class="overflow-x-auto rounded-2xl">
+                    <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                        <thead><tr class="border-b border-gray-100 bg-slate-50 text-[11px] font-bold text-textSecondary uppercase tracking-wider"><th class="py-4 px-4 md:px-6">Arete</th><th class="py-4 px-4 md:px-6">Raza</th><th class="py-4 px-4 md:px-6">Edad</th><th class="py-4 px-4 md:px-6">Peso</th><th class="py-4 px-4 md:px-6">Desviación</th><th class="py-4 px-4 md:px-6">Estatus</th><th class="py-4 px-4 md:px-6 text-right">Manejo</th></tr></thead>
+                        <tbody id="table-machos" class="divide-y divide-gray-50 text-[13px] font-medium text-textPrimary"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-remplazos" class="fade-in hidden space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                <h1 class="text-2xl font-bold text-textPrimary">Remplazos</h1>
+                <button onclick="openCreateModal('Remplazo')" class="w-full md:w-auto bg-brandGreen hover:bg-brandGreenLight text-white px-5 py-3 md:py-2.5 rounded-xl text-[13px] font-semibold shadow-soft transition-all card-hover flex items-center justify-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Registrar Remplazo
+                </button>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-soft">
+                <div class="overflow-x-auto rounded-2xl">
+                    <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                        <thead><tr class="border-b border-gray-100 bg-slate-50 text-[11px] font-bold text-textSecondary uppercase tracking-wider"><th class="py-4 px-4 md:px-6">Arete</th><th class="py-4 px-4 md:px-6">Raza</th><th class="py-4 px-4 md:px-6">Edad</th><th class="py-4 px-4 md:px-6">Peso</th><th class="py-4 px-4 md:px-6">Desviación</th><th class="py-4 px-4 md:px-6">Estatus</th><th class="py-4 px-4 md:px-6 text-right">Manejo</th></tr></thead>
+                        <tbody id="table-remplazos" class="divide-y divide-gray-50 text-[13px] font-medium text-textPrimary"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="modal-add" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-end md:items-center justify-center hidden opacity-0 transition-opacity duration-300 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 border border-gray-100 shadow-2xl space-y-5 fade-in max-h-[85vh] overflow-y-auto transform scale-95 transition-transform duration-300 w-full" id="modal-add-content">
+            <div class="flex justify-between items-center border-b border-gray-50 pb-4 sticky top-0 bg-white z-10">
+                <h3 class="text-[16px] font-bold text-textPrimary flex items-center gap-2" id="modal-headline"><i data-lucide="file-plus" class="w-5 h-5 text-brandGreen"></i> Registrar Entrada</h3>
+                <button onclick="toggleModal('modal-add', false)" class="text-textSecondary hover:text-red-500 transition-colors bg-slate-50 p-1.5 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="form-ovino" onsubmit="saveAnimal(event)" class="space-y-4 text-[13px] text-textPrimary font-medium">
+                <input type="hidden" id="form-id">
+                <div>
+                    <label class="block text-xs font-bold text-textSecondary mb-1.5 uppercase tracking-wider">Arete ID</label>
+                    <input type="text" id="form-arete" required placeholder="Ej: OV-400" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-[14px]">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-textSecondary mb-1.5 uppercase tracking-wider">Raza</label>
+                        <select id="form-raza" class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white cursor-pointer text-[14px]">
+                            <option value="Dorper">Dorper</option>
+                            <option value="Katahdin">Katahdin</option>
+                            <option value="Suffolk">Suffolk</option>
+                            <option value="Pelibuey">Pelibuey</option>
+                            <option value="Charollais">Charollais</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-textSecondary mb-1.5 uppercase tracking-wider">Categoría</label>
+                        <select id="form-tipo" onchange="toggleGestacionField()" class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white cursor-pointer text-[14px]">
+                            <option value="Vientre">Vientre</option>
+                            <option value="Cría">Cría</option>
+                            <option value="Semental">Semental</option>
+                            <option value="Desarrollo">Desarrollo</option>
+                            <option value="Macho">Macho</option>
+                            <option value="Remplazo">Remplazo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-textSecondary mb-1.5 uppercase tracking-wider">Edad (M)</label>
+                        <input type="number" id="form-edad" required min="0" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-[14px]">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-textSecondary mb-1.5 uppercase tracking-wider">Peso (kg)</label>
+                        <input type="number" id="form-peso" required min="0" step="0.1" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-[14px]">
+                    </div>
+                </div>
+                <div id="campo-gestacion" class="hidden">
+                    <label class="block text-xs font-bold text-textSecondary mb-1.5 uppercase tracking-wider">Fecha de Monta</label>
+                    <input type="date" id="form-gestacion" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white cursor-pointer text-[14px]">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-textSecondary mb-1.5 uppercase tracking-wider">Historial Clínico</label>
+                    <textarea id="form-historial" rows="2" placeholder="Ej: 12/Jun - Ivermectina" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl resize-none focus:bg-white text-[14px]"></textarea>
+                </div>
+                <button type="submit" class="w-full bg-brandGreen hover:bg-brandGreenLight text-white py-3.5 rounded-xl font-bold text-[14px] shadow-soft hover:shadow-lg transition-all mt-4 flex items-center justify-center gap-2">
+                    <i data-lucide="database" class="w-4 h-4"></i> Guardar y Sincronizar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-reporte" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-end md:items-center justify-center hidden opacity-0 transition-opacity duration-300 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6 border border-gray-100 shadow-2xl space-y-5 fade-in transform scale-95 transition-transform duration-300 max-h-[85vh] overflow-y-auto w-full" id="modal-reporte-content">
+            <div class="flex justify-between items-center border-b border-gray-50 pb-4 sticky top-0 bg-white z-10">
+                <h3 class="text-[16px] font-bold text-textPrimary flex items-center gap-2"><i data-lucide="file-check-2" class="w-5 h-5 text-brandGreen"></i> Reporte Semanal</h3>
+                <button onclick="toggleModal('modal-reporte', false)" class="text-textSecondary hover:text-red-500 transition-colors bg-slate-50 p-1.5 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="contenido-reporte" class="text-[13px] text-textPrimary space-y-4 font-medium leading-relaxed"></div>
+            <button onclick="toggleModal('modal-reporte', false)" class="w-full bg-textPrimary hover:bg-black text-white py-3.5 rounded-xl font-bold text-[14px] shadow-soft transition-all mt-2">Cerrar Visor</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuración Modo Oscuro
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            
+            const iconName = isDark ? 'sun' : 'moon';
+            const iconEl = document.getElementById('theme-icon');
+            const iconMobileEl = document.getElementById('theme-icon-mobile');
+            if(iconEl) iconEl.setAttribute('data-lucide', iconName);
+            if(iconMobileEl) iconMobileEl.setAttribute('data-lucide', iconName);
+            lucide.createIcons();
+        }
+
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            setTimeout(() => { 
+                if(document.getElementById('theme-icon')) document.getElementById('theme-icon').setAttribute('data-lucide', 'sun'); 
+                if(document.getElementById('theme-icon-mobile')) document.getElementById('theme-icon-mobile').setAttribute('data-lucide', 'sun'); 
+                lucide.createIcons(); 
+            }, 100);
+        }
+
+        const firebaseConfig = { apiKey: "AIzaSyCLg4k6QTDHTHNmOgLvAWh9DTTwMh7fvFs", authDomain: "ovinos-agrosabino.firebaseapp.com", databaseURL: "https://ovinos-agrosabino-default-rtdb.firebaseio.com", projectId: "ovinos-agrosabino" };
+        let db = null; let isFirebaseActive = false;
+        
+        try { 
+            const app = firebase.initializeApp(firebaseConfig); 
+            db = firebase.database(app); 
+            isFirebaseActive = true; 
+        } catch(e) { 
+            console.error("Error al inicializar Firebase:", e); 
+        }
+
+        let dataset = []; let climaData = {};
+        const fechaActual = new Date();
+        let diaSeleccionadoActual = fechaActual.getDate();
+        const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        document.getElementById('mes-actual-display').innerText = `${meses[fechaActual.getMonth()]} ${fechaActual.getFullYear()}`;
+
+        const BIOMETRIC_RULES = { 
+            Dorper: { base: 5, incrementoMes: 5.5, maxMacho: 100, maxHembra: 75 }, 
+            Katahdin: { base: 4.5, incrementoMes: 4.8, maxMacho: 95, maxHembra: 65 }, 
+            Suffolk: { base: 5.5, incrementoMes: 6.0, maxMacho: 120, maxHembra: 85 }, 
+            Pelibuey: { base: 3.8, incrementoMes: 4.0, maxMacho: 75, maxHembra: 50 }, 
+            Charollais: { base: 5.2, incrementoMes: 5.8, maxMacho: 110, maxHembra: 80 } 
+        };
+
+        window.onload = () => { startDataSync(); fetchRealTimeWeather(); lucide.createIcons(); };
+
+        async function fetchRealTimeWeather() {
+            try {
+                const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=21.1444&longitude=-104.5858&current_weather=true');
+                const data = await res.json();
+                const tempActual = data.current_weather.temperature;
+                document.getElementById('metric-clima-hoy').innerText = `${tempActual}°C`;
+                if(climaData[diaSeleccionadoActual]) climaData[diaSeleccionadoActual].temp = tempActual;
+                renderCalendario();
+            } catch(e) { console.error("API Clima Falló", e); }
+        }
+
+        function startDataSync() {
+            if (isFirebaseActive) {
+                db.ref('ovinos_tequepexpan/').on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) { dataset = data.dataset || []; climaData = data.climaData || generateDefaultClima(); } 
+                    else { dataset = generateDefaultDataset(); climaData = generateDefaultClima(); }
+                    actualizarEstatusSinc(true); renderApp(); seleccionarDiaClima(diaSeleccionadoActual);
+                });
+            } else {
+                actualizarEstatusSinc(false);
+                const localData = localStorage.getItem('ovinosData');
+                if (localData) { const p = JSON.parse(localData); dataset = p.dataset || []; climaData = p.climaData || generateDefaultClima(); } 
+                else { dataset = generateDefaultDataset(); climaData = generateDefaultClima(); }
+                renderApp(); seleccionarDiaClima(diaSeleccionadoActual);
+            }
+        }
+
+        function actualizarEstatusSinc(activo) {
+            const elDesk = document.getElementById('sync-status'); const elMob = document.getElementById('sync-status-mobile');
+            if(activo) {
+                if(elDesk) elDesk.classList.replace('bg-amber-400', 'bg-brandGreen');
+                if(elMob) elMob.classList.replace('bg-amber-400', 'bg-brandGreen');
+            } else {
+                if(elDesk) elDesk.classList.replace('bg-brandGreen', 'bg-amber-400');
+                if(elMob) elMob.classList.replace('bg-brandGreen', 'bg-amber-400');
+            }
+        }
+
+        function pushDataToNetwork() {
+            if (isFirebaseActive) db.ref('ovinos_tequepexpan/').set({ dataset: dataset, climaData: climaData });
+            else localStorage.setItem('ovinosData', JSON.stringify({ dataset: dataset, climaData: climaData }));
+            renderApp();
+        }
+
+        function switchPage(pageId) {
+            ['dashboard', 'inventario', 'vientres', 'crias', 'sementales', 'machos', 'remplazos'].forEach(id => {
+                document.getElementById(`page-${id}`).classList.add('hidden');
+                document.getElementById(`nav-${id}`).classList.remove('active');
+            });
+            document.getElementById(`page-${pageId}`).classList.remove('hidden');
+            document.getElementById(`nav-${pageId}`).classList.add('active');
+            lucide.createIcons();
+            window.scrollTo(0, 0);
+        }
+
+        function toggleModal(modalId, show) {
+            const modal = document.getElementById(modalId); const content = document.getElementById(`${modalId}-content`);
+            if (show) {
+                modal.classList.remove('hidden'); setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 10);
+            } else {
+                modal.classList.add('opacity-0'); content.classList.add('scale-95'); setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        function toggleGestacionField() {
+            const tipo = document.getElementById('form-tipo').value; document.getElementById('campo-gestacion').style.display = tipo === 'Vientre' ? 'block' : 'none';
+        }
+
+        function openCreateModal(defaultType) {
+            document.getElementById('form-ovino').reset(); document.getElementById('form-id').value = ''; document.getElementById('form-tipo').value = defaultType;
+            document.getElementById('modal-headline').innerHTML = `<i data-lucide="file-plus" class="w-5 h-5 text-brandGreen"></i> Registrar Entrada`;
+            toggleGestacionField(); toggleModal('modal-add', true); lucide.createIcons();
+        }
+
+        function saveAnimal(event) {
+            event.preventDefault();
+            const idForm = document.getElementById('form-id').value; const tipo = document.getElementById('form-tipo').value;
+            const datos = {
+                arete: document.getElementById('form-arete').value.trim().toUpperCase(), raza: document.getElementById('form-raza').value,
+                tipo: tipo, edad: parseInt(document.getElementById('form-edad').value), peso: parseFloat(document.getElementById('form-peso').value),
+                historial: document.getElementById('form-historial').value, gestacion: tipo === 'Vientre' ? document.getElementById('form-gestacion').value : ''
+            };
+            if (idForm) {
+                const index = dataset.findIndex(a => a.id === parseInt(idForm)); if (index !== -1) dataset[index] = { ...dataset[index], ...datos };
+            } else { dataset.push({ id: Date.now(), ...datos }); }
+            toggleModal('modal-add', false); pushDataToNetwork();
+            if(tipo === "Vientre") switchPage('vientres'); else if(tipo === "Cría") switchPage('crias'); else if(tipo === "Semental") switchPage('sementales'); else if(tipo === "Macho") switchPage('machos'); else if(tipo === "Remplazo") switchPage('remplazos'); else switchPage('inventario');
+        }
+
+        function editAnimal(id) {
+            const animal = dataset.find(a => a.id === id); if (!animal) return;
+            document.getElementById('form-id').value = animal.id; document.getElementById('form-arete').value = animal.arete; document.getElementById('form-raza').value = animal.raza;
+            document.getElementById('form-tipo').value = animal.tipo; document.getElementById('form-edad').value = animal.edad; document.getElementById('form-peso').value = animal.peso;
+            document.getElementById('form-historial').value = animal.historial || ''; document.getElementById('form-gestacion').value = animal.gestacion || '';
+            document.getElementById('modal-headline').innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-brandGreen"></i> Modificar Ficha`;
+            toggleGestacionField(); toggleModal('modal-add', true); lucide.createIcons();
+        }
+
+        function deleteAnimal(id) { if (confirm("¿Confirmar eliminación permanente?")) { dataset = dataset.filter(a => a.id !== id); pushDataToNetwork(); } }
+
+        function seleccionarDiaClima(dia) {
+            diaSeleccionadoActual = dia; const info = climaData[dia] || { temp: 28, hum: 75, dieta: "Forraje Estándar", tratamiento: "Ninguno", notas: "" };
+            document.getElementById('clima-fecha-seleccionada').innerText = `${dia} de ${meses[fechaActual.getMonth()]}`;
+            document.getElementById('input-temp').value = info.temp; document.getElementById('input-hum').value = info.hum; document.getElementById('input-dieta').value = info.dieta;
+            document.getElementById('input-tratamiento').value = info.tratamiento; document.getElementById('input-clima-notes').value = info.notas;
+
+            const box = document.getElementById('clima-diagnostico-box');
+            if (info.hum >= 75 && info.temp >= 28) {
+                box.className = "p-3 rounded-xl text-[12px] font-mono border bg-amber-50 text-amber-800 border-amber-200 flex items-start gap-2 mt-2";
+                box.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0"></i> <span><strong>ALERTA CALOR.</strong> Vigilar parásitos.</span>`;
+            } else {
+                box.className = "p-3 rounded-xl text-[12px] font-mono border bg-emerald-50 text-emerald-700 border-emerald-100 flex items-start gap-2 mt-2";
+                box.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0"></i> <span><strong>ESTABLE.</strong> Parámetros en rango.</span>`;
+            }
+            renderCalendario(); lucide.createIcons();
+        }
+
+        function updateClimaDia() {
+            climaData[diaSeleccionadoActual] = { temp: parseInt(document.getElementById('input-temp').value) || 27, hum: parseInt(document.getElementById('input-hum').value) || 75, dieta: document.getElementById('input-dieta').value, tratamiento: document.getElementById('input-tratamiento').value, notes: document.getElementById('input-clima-notes').value.trim() };
+            pushDataToNetwork(); seleccionarDiaClima(diaSeleccionadoActual);
+        }
+
+        function renderCalendario() {
+            const container = document.getElementById('calendar-days-container'); container.innerHTML = '';
+            const primerDiaMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1).getDay();
+            for(let o = 0; o < primerDiaMes; o++) container.innerHTML += `<div class="p-1 md:p-2 bg-transparent rounded-xl border border-transparent"></div>`;
+            const diasEnMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth() + 1, 0).getDate();
+
+            for (let dia = 1; dia <= diasEnMes; dia++) {
+                const info = climaData[dia] || { temp: 0, notas: "", tratamiento: "Ninguno" };
+                const esSeleccionado = dia === diaSeleccionadoActual;
+                container.innerHTML += `
+                    <button onclick="seleccionarDiaClima(${dia})" class="p-1 md:p-2 rounded-xl border text-center flex flex-col justify-between items-center min-h-[50px] md:min-h-[65px] transition-all relative card-hover
+                        ${esSeleccionado ? 'bg-textPrimary text-white border-textPrimary shadow-md' : 'bg-white text-textPrimary border-slate-200 hover:border-brandGreen'}">
+                        <span class="text-[10px] md:text-[11px] font-semibold ${esSeleccionado ? 'text-slate-300' : 'text-textSecondary'}">${dia}</span>
+                        <span class="text-[11px] md:text-[13px] font-mono font-bold tracking-tight">${info.temp}°</span>
+                        <div class="flex space-x-1 absolute bottom-1.5 justify-center w-full">
+                            ${info.notas.trim() !== "" ? `<span class="w-1.5 h-1.5 rounded-full ${esSeleccionado ? 'bg-brandGreenLight' : 'bg-brandGreen'}"></span>` : ''}
+                            ${info.tratamiento !== "Ninguno" ? `<span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>` : ''}
+                        </div>
+                    </button>
+                `;
+            }
+        }
+
+        function renderApp() {
+            let optimos = 0, bajos = 0, tratamientosActivos = 0; let insightsHTML = "";
+            for (let d in climaData) { if (climaData[d].tratamiento !== "Ninguno") tratamientosActivos++; }
+
+            const tInventario = document.getElementById('table-inventario'); const tVientres = document.getElementById('table-vientres'); const tCrias = document.getElementById('table-crias'); const tSementales = document.getElementById('table-sementales'); const tMachos = document.getElementById('table-machos'); const tRemplazos = document.getElementById('table-remplazos');
+            tInventario.innerHTML = ''; tVientres.innerHTML = ''; tCrias.innerHTML = ''; tSementales.innerHTML = ''; tMachos.innerHTML = ''; tRemplazos.innerHTML = '';
+
+            dataset.forEach(animal => {
+                const regla = BIOMETRIC_RULES[animal.raza];
+                let maxAdulto = (animal.tipo === 'Semental' || animal.tipo === 'Macho') ? regla?.maxMacho : regla?.maxHembra;
+                let pesoT = regla ? Math.min(regla.base + (regla.incrementoMes * animal.edad), maxAdulto) : animal.peso;
+                let desv = regla ? ((animal.peso - pesoT) / pesoT) * 100 : 0;
+                let estatus = desv < -12 ? "Bajo Peso" : "Óptimo";
+                let color = desv < -12 ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+                if (estatus === "Óptimo") optimos++; else bajos++;
+                if (desv < -12) insightsHTML += `<div class="p-3 border-l-4 border-amber-500 bg-amber-50 text-amber-800 rounded-r-xl flex items-center gap-2"><i data-lucide="arrow-down-circle" class="w-4 h-4 text-amber-600 shrink-0"></i> <span><strong>${animal.arete}:</strong> Déficit (${Math.abs(desv).toFixed(1)}%).</span></div>`;
+
+                const actionButtons = `
+                    <td class="py-3 md:py-4 px-4 md:px-6 text-right space-x-1 font-medium whitespace-nowrap">
+                        <button onclick="editAnimal(${animal.id})" class="text-textSecondary bg-slate-50 border border-slate-200 p-1.5 rounded-lg hover:bg-slate-100 hover:text-textPrimary transition-all" title="Editar"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                        <button onclick="deleteAnimal(${animal.id})" class="text-red-400 bg-red-50 border border-red-100 p-1.5 rounded-lg hover:bg-red-100 hover:text-red-600 transition-all" title="Borrar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </td>
+                `;
+
+                const colBasicas = `<td class="py-3 md:py-4 px-4 md:px-6 font-bold text-textPrimary whitespace-nowrap">${animal.arete}</td>`;
+                const colRazaEdad = `<td class="py-3 md:py-4 px-4 md:px-6 whitespace-nowrap">${animal.raza}</td><td class="py-3 md:py-4 px-4 md:px-6 font-mono text-xs whitespace-nowrap">${animal.edad} m</td>`;
+                const colDesvEstatus = `<td class="py-3 md:py-4 px-4 md:px-6 font-mono text-[13px] font-bold whitespace-nowrap ${desv < 0 ? 'text-red-500':'text-brandGreen'}">${desv > 0 ? '+':''}${desv.toFixed(1)}%</td><td class="py-3 md:py-4 px-4 md:px-6 whitespace-nowrap"><span class="px-3 py-1 rounded-full text-[11px] font-bold border ${color}">${estatus}</span></td>`;
+                
+                const colCategoria = `<td class="py-3 md:py-4 px-4 md:px-6 whitespace-nowrap"><span class="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md text-textSecondary font-semibold text-xs">${animal.tipo}</span></td>`;
+                const colPeso = `<td class="py-3 md:py-4 px-4 md:px-6 font-bold text-[13px] md:text-[14px]">${animal.peso} kg</td>`;
+                const colGestacion = `<td class="py-3 md:py-4 px-4 md:px-6 font-mono text-xs">${animal.gestacion ? `<span class="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100">${animal.gestacion}</span>` : '<span class="text-slate-400">Vacío</span>'}</td>`;
+
+                const rowInventario = `<tr class="hover:bg-slate-50 border-b border-gray-50 transition-colors group">${colBasicas}${colCategoria}${colRazaEdad}${colPeso}${colDesvEstatus}${actionButtons}</tr>`;
+                const rowVientre = `<tr class="hover:bg-slate-50 border-b border-gray-50 transition-colors group">${colBasicas}${colRazaEdad}${colGestacion}${colDesvEstatus}${actionButtons}</tr>`;
+                const rowGenerico = `<tr class="hover:bg-slate-50 border-b border-gray-50 transition-colors group">${colBasicas}${colRazaEdad}${colPeso}${colDesvEstatus}${actionButtons}</tr>`;
+
+                tInventario.innerHTML += rowInventario; 
+                if (animal.tipo === "Vientre") tVientres.innerHTML += rowVientre; 
+                if (animal.tipo === "Cría") tCrias.innerHTML += rowGenerico; 
+                if (animal.tipo === "Semental") tSementales.innerHTML += rowGenerico;
+                if (animal.tipo === "Macho") tMachos.innerHTML += rowGenerico;
+                if (animal.tipo === "Remplazo") tRemplazos.innerHTML += rowGenerico;
+            });
+
+            document.getElementById('metric-total').innerText = dataset.length; document.getElementById('metric-optimo').innerText = optimos; document.getElementById('metric-tratamientos').innerText = tratamientosActivos;
+            document.getElementById('dashboard-insights').innerHTML = insightsHTML || `<div class="p-3 bg-emerald-50 text-emerald-800 rounded-xl flex items-center gap-2 border border-emerald-100"><i data-lucide="check-circle" class="w-4 h-4 shrink-0"></i> Ganado estable sin alertas médicas.</div>`;
+            lucide.createIcons();
+        }
+
+        function generarReporteSemanal() {
+            let total = dataset.length; let gestantes = dataset.filter(a => a.tipo === 'Vientre' && a.gestacion).length;
+            let bajoPeso = dataset.filter(a => { 
+                const regla = BIOMETRIC_RULES[a.raza]; 
+                let maxAdulto = (a.tipo === 'Semental' || a.tipo === 'Macho') ? regla?.maxMacho : regla?.maxHembra;
+                let pesoT = regla ? Math.min(regla.base + (regla.incrementoMes * a.edad), maxAdulto) : a.peso; 
+                return regla ? (((a.peso - pesoT) / pesoT) * 100) < -12 : false; 
+            });
+            let historiales = dataset.filter(a => a.historial && a.historial.trim() !== "");
+            let notesSemana = []; let inicioSemana = Math.max(1, diaSeleccionadoActual - 6);
+            for(let i = inicioSemana; i <= diaSeleccionadoActual; i++) { if(climaData[i] && climaData[i].notas && climaData[i].notas.trim() !== "") { notesSemana.push(`<strong>Día ${i}:</strong> ${climaData[i].notas}`); } }
+            let resumenNotas = notesSemana.length > 0 ? notesSemana.join("<br>") : "Sin observaciones semanales.";
+
+            let html = `
+                <div class="grid grid-cols-3 gap-2 md:gap-3 mb-4">
+                    <div class="bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-100 text-center"><p class="text-[10px] md:text-[11px] text-textSecondary uppercase font-bold">Total</p><p class="text-lg md:text-xl font-bold text-textPrimary">${total}</p></div>
+                    <div class="bg-indigo-50 p-2 md:p-3 rounded-xl border border-indigo-100 text-center"><p class="text-[10px] md:text-[11px] text-indigo-700 uppercase font-bold">Gestantes</p><p class="text-lg md:text-xl font-bold text-indigo-700">${gestantes}</p></div>
+                    <div class="bg-red-50 p-2 md:p-3 rounded-xl border border-red-100 text-center"><p class="text-[10px] md:text-[11px] text-red-700 uppercase font-bold">Alertas</p><p class="text-lg md:text-xl font-bold text-red-700">${bajoPeso.length}</p></div>
+                </div>
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                    <p class="font-bold text-textPrimary mb-2 flex items-center gap-2"><i data-lucide="stethoscope" class="w-4 h-4 text-slate-500"></i> Últimos Movimientos Clínicos</p>
+                    ${historiales.length > 0 ? historiales.slice(0,4).map(a => `<p class="text-[12px] md:text-[13px] text-textSecondary border-b border-slate-200 pb-2 last:border-0 last:pb-0"><span class="font-bold text-textPrimary">${a.arete}</span>: ${a.historial}</p>`).join('') : '<p class="text-[12px] md:text-[13px] text-textSecondary">Sin registros recientes.</p>'}
+                </div>
+                <div class="p-4 bg-brandGreen/10 border border-brandGreen/20 rounded-xl space-y-2 mt-4">
+                    <p class="font-bold text-brandGreen mb-2 flex items-center gap-2"><i data-lucide="book-open" class="w-4 h-4"></i> Resumen de Bitácora</p>
+                    <p class="text-[12px] md:text-[13px] text-emerald-900 leading-relaxed">${resumenNotas}</p>
+                </div>
+            `;
+            document.getElementById('contenido-reporte').innerHTML = html; toggleModal('modal-reporte', true); lucide.createIcons();
+        }
+
+        // Datos iniciales
+        function generateDefaultDataset() { return [ { id: 1, arete: "OV-101", tipo: "Vientre", raza: "Dorper", edad: 14, peso: 70.0, gestacion: "2026-05-10", historial: "Vacuna Clostridial aplicada" }, { id: 2, arete: "OV-102", tipo: "Desarrollo", raza: "Katahdin", edad: 6, peso: 22.0, gestacion: "", historial: "" }, { id: 3, arete: "OV-103", tipo: "Semental", raza: "Suffolk", edad: 20, peso: 115.0, gestacion: "", historial: "Desparasitación 01/Jun" } ]; }
+        function generateDefaultClima() { let cl = {}; for (let i = 1; i <= 31; i++) { cl[i] = { temp: 28, hum: 75, dieta: "Forraje Estándar", tratamiento: "Ninguno", notas: "" }; } return cl; }
+    </script>
+</body>
+</html>
