@@ -617,7 +617,7 @@
             dataset.forEach(animal => {
                 const regla = BIOMETRIC_RULES[animal.raza];
                 let maxAdulto = (animal.tipo === 'Semental' || animal.tipo === 'Macho') ? regla?.maxMacho : regla?.maxHembra;
-                let pesoT = regla ? Math.min(regla.base + (regla.incrementoMes * animal.edad), maxAdulto) : animal.peso;
+                let pesoT = regla ? ((animal.tipo === 'Cría' && animal.edad <= 1) ? regla.base : Math.min(regla.base + (regla.incrementoMes * animal.edad), maxAdulto)) : animal.peso;
                 let desv = regla ? ((animal.peso - pesoT) / pesoT) * 100 : 0;
                 let estatus = desv < -12 ? "Bajo Peso" : "Óptimo";
                 let color = desv < -12 ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -662,7 +662,7 @@
             let bajoPeso = dataset.filter(a => { 
                 const regla = BIOMETRIC_RULES[a.raza]; 
                 let maxAdulto = (a.tipo === 'Semental' || a.tipo === 'Macho') ? regla?.maxMacho : regla?.maxHembra;
-                let pesoT = regla ? Math.min(regla.base + (regla.incrementoMes * a.edad), maxAdulto) : a.peso; 
+                let pesoT = regla ? ((a.tipo === 'Cría' && a.edad <= 1) ? regla.base : Math.min(regla.base + (regla.incrementoMes * a.edad), maxAdulto)) : a.peso; 
                 return regla ? (((a.peso - pesoT) / pesoT) * 100) < -12 : false; 
             });
             let historiales = dataset.filter(a => a.historial && a.historial.trim() !== "");
