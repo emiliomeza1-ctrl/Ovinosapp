@@ -205,6 +205,17 @@
                             <label class="block text-textSecondary mb-1.5 font-medium text-xs">Bitácora / Observaciones</label>
                             <textarea id="input-clima-notas" rows="3" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg resize-none focus:bg-white"></textarea>
                         </div>
+                        <div class="text-[13px] mt-3">
+                            <label class="block text-textSecondary mb-1.5 font-medium text-xs">Evidencia Fotográfica</label>
+                            <input type="file" id="input-clima-img" accept="image/*" class="w-full text-xs text-textSecondary file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-brandGreen/10 file:text-brandGreen hover:file:bg-brandGreen/20 transition-all cursor-pointer outline-none">
+                            
+                            <div id="preview-clima-container" class="mt-3 relative hidden group">
+                                <img id="preview-clima-img" class="rounded-xl w-full max-h-40 object-cover border border-slate-200 shadow-sm" alt="Vista previa de bitácora">
+                                <button type="button" onclick="removerImagenClima()" class="absolute top-2 right-2 bg-red-500/90 hover:bg-red-600 text-white p-1.5 rounded-lg shadow-sm backdrop-blur-sm transition-all flex items-center justify-center" title="Borrar imagen">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="pt-4 mt-2 border-t border-gray-50">
                         <button onclick="updateClimaDia()" class="w-full bg-brandGreen hover:bg-brandGreenLight text-white text-[13px] py-3 rounded-xl font-semibold transition-colors shadow-md hover:shadow-lg mb-3 flex items-center justify-center gap-2">
@@ -411,6 +422,8 @@
     </div>
 
     <script>
+        let currentClimaImageBase64 = null;
+
         // Configuración Modo Oscuro
         function toggleTheme() {
             document.documentElement.classList.toggle('dark');
@@ -459,7 +472,36 @@
             Charollais: { base: 5.2, incrementoMes: 5.8, maxMacho: 110, maxHembra: 80 } 
         };
 
-        window.onload = () => { startDataSync(); fetchRealTimeWeather(); lucide.createIcons(); };
+        window.onload = () => { 
+            startDataSync(); 
+            fetchRealTimeWeather(); 
+            lucide.createIcons(); 
+            
+            document.getElementById('input-clima-img').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                const previewImg = document.getElementById('preview-clima-img');
+                const previewContainer = document.getElementById('preview-clima-container');
+                
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        currentClimaImageBase64 = event.target.result;
+                        previewImg.src = currentClimaImageBase64;
+                        previewContainer.classList.remove('hidden');
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    removerImagenClima();
+                }
+            });
+        };
+
+        function removerImagenClima() {
+            currentClimaImageBase64 = null;
+            document.getElementById('input-clima-img').value = '';
+            document.getElementById('preview-clima-img').src = '';
+            document.getElementById('preview-clima-container').classList.add('hidden');
+        }
 
         async function fetchRealTimeWeather() {
             try {
@@ -563,10 +605,27 @@
         function deleteAnimal(id) { if (confirm("¿Confirmar eliminación permanente?")) { dataset = dataset.filter(a => a.id !== id); pushDataToNetwork(); } }
 
         function seleccionarDiaClima(dia) {
-            diaSeleccionadoActual = dia; const info = climaData[dia] || { temp: 28, hum: 75, dieta: "Forraje Estándar", tratamiento: "Ninguno", notas: "" };
+            diaSeleccionadoActual = dia; 
+            const info = climaData[dia] || { temp: 28, hum: 75, dieta: "Forraje Estándar", tratamiento: "Ninguno", notas: "", imagen: null };
             document.getElementById('clima-fecha-seleccionada').innerText = `${dia} de ${meses[fechaActual.getMonth()]}`;
-            document.getElementById('input-temp').value = info.temp; document.getElementById('input-hum').value = info.hum; document.getElementById('input-dieta').value = info.dieta;
-            document.getElementById('input-tratamiento').value = info.tratamiento; document.getElementById('input-clima-notas').value = info.notas;
+            document.getElementById('input-temp').value = info.temp; 
+            document.getElementById('input-hum').value = info.hum; 
+            document.getElementById('input-dieta').value = info.dieta;
+            document.getElementById('input-tratamiento').value = info.tratamiento; 
+            document.getElementById('input-clima-notas').value = info.notas;
+
+            currentClimaImageBase64 = info.imagen || null;
+            const previewImg = document.getElementById('preview-clima-img');
+            const previewContainer = document.getElementById('preview-clima-container');
+            
+            if (currentClimaImageBase64) {
+                previewImg.src = currentClimaImageBase64;
+                previewContainer.classList.remove('hidden');
+            } else {
+                previewImg.src = '';
+                previewContainer.classList.add('hidden');
+            }
+            document.getElementById('input-clima-img').value = '';
 
             const box = document.getElementById('clima-diagnostico-box');
             if (info.hum >= 75 && info.temp >= 28) {
@@ -580,8 +639,16 @@
         }
 
         function updateClimaDia() {
-            climaData[diaSeleccionadoActual] = { temp: parseInt(document.getElementById('input-temp').value) || 27, hum: parseInt(document.getElementById('input-hum').value) || 75, dieta: document.getElementById('input-dieta').value, tratamiento: document.getElementById('input-tratamiento').value, notas: document.getElementById('input-clima-notas').value.trim() };
-            pushDataToNetwork(); seleccionarDiaClima(diaSeleccionadoActual);
+            climaData[diaSeleccionadoActual] = { 
+                temp: parseInt(document.getElementById('input-temp').value) || 27, 
+                hum: parseInt(document.getElementById('input-hum').value) || 75, 
+                dieta: document.getElementById('input-dieta').value, 
+                tratamiento: document.getElementById('input-tratamiento').value, 
+                notas: document.getElementById('input-clima-notas').value.trim(),
+                imagen: currentClimaImageBase64
+            };
+            pushDataToNetwork(); 
+            seleccionarDiaClima(diaSeleccionadoActual);
         }
 
         function renderCalendario() {
@@ -674,9 +741,18 @@
                 return regla ? (((a.peso - pesoT) / pesoT) * 100) < -12 : false; 
             });
             let historiales = dataset.filter(a => a.historial && a.historial.trim() !== "");
-            let notesSemana = []; let inicioSemana = Math.max(1, diaSeleccionadoActual - 6);
-            for(let i = inicioSemana; i <= diaSeleccionadoActual; i++) { if(climaData[i] && climaData[i].notas && climaData[i].notas.trim() !== "") { notesSemana.push(`<strong>Día ${i}:</strong> ${climaData[i].notas}`); } }
-            let resumenNotas = notesSemana.length > 0 ? notesSemana.join("<br>") : "Sin observaciones semanales.";
+            
+            let notesSemana = []; 
+            let inicioSemana = Math.max(1, diaSeleccionadoActual - 6);
+            
+            for(let i = inicioSemana; i <= diaSeleccionadoActual; i++) { 
+                if(climaData[i] && ((climaData[i].notas && climaData[i].notas.trim() !== "") || climaData[i].imagen)) { 
+                    let imgHtml = climaData[i].imagen ? `<img src="${climaData[i].imagen}" class="mt-3 rounded-lg w-full max-h-48 object-cover border border-emerald-200 shadow-sm">` : '';
+                    let textoNota = climaData[i].notas ? climaData[i].notas : 'Imagen adjunta sin texto.';
+                    notesSemana.push(`<div class="mb-4"><strong>Día ${i}:</strong> ${textoNota} ${imgHtml}</div>`); 
+                } 
+            }
+            let resumenNotas = notesSemana.length > 0 ? notesSemana.join("") : "Sin observaciones semanales.";
 
             let html = `
                 <div class="grid grid-cols-3 gap-2 md:gap-3 mb-4">
@@ -688,12 +764,14 @@
                     <p class="font-bold text-textPrimary mb-2 flex items-center gap-2"><i data-lucide="stethoscope" class="w-4 h-4 text-slate-500"></i> Últimos Movimientos Clínicos</p>
                     ${historiales.length > 0 ? historiales.slice(0,4).map(a => `<p class="text-[12px] md:text-[13px] text-textSecondary border-b border-slate-200 pb-2 last:border-0 last:pb-0"><span class="font-bold text-textPrimary">${a.arete}</span>: ${a.historial}</p>`).join('') : '<p class="text-[12px] md:text-[13px] text-textSecondary">Sin registros recientes.</p>'}
                 </div>
-                <div class="p-4 bg-brandGreen/10 border border-brandGreen/20 rounded-xl space-y-2 mt-4">
-                    <p class="font-bold text-brandGreen mb-2 flex items-center gap-2"><i data-lucide="book-open" class="w-4 h-4"></i> Resumen de Bitácora</p>
-                    <p class="text-[12px] md:text-[13px] text-emerald-900 leading-relaxed">${resumenNotas}</p>
+                <div class="p-4 bg-brandGreen/10 border border-brandGreen/20 rounded-xl mt-4">
+                    <p class="font-bold text-brandGreen mb-3 flex items-center gap-2"><i data-lucide="book-open" class="w-4 h-4"></i> Resumen de Bitácora</p>
+                    <div class="text-[12px] md:text-[13px] text-emerald-900 leading-relaxed">${resumenNotas}</div>
                 </div>
             `;
-            document.getElementById('contenido-reporte').innerHTML = html; toggleModal('modal-reporte', true); lucide.createIcons();
+            document.getElementById('contenido-reporte').innerHTML = html; 
+            toggleModal('modal-reporte', true); 
+            lucide.createIcons();
         }
 
         // Datos iniciales
